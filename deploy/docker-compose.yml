@@ -1,0 +1,17 @@
+services:
+  app:
+    build: ..
+    env_file: ../.env
+    volumes:
+      - dm-data:/data
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+volumes:
+  dm-data:
+  caddy-data:

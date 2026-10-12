@@ -1,0 +1,5 @@
+# Replace with your domain; Caddy fetches the HTTPS certificate automatically.
+files.example.com {
+	encode zstd gzip
+	reverse_proxy app:8000
+}
