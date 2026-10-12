@@ -1,7 +1,7 @@
 # Drive Manager
 
 Self-hosted web file manager that puts several cloud storage accounts (multiple Google Drives,
-Dropbox, Box, ...) behind one interface. See [PLAN.md](PLAN.md) for architecture and milestones.
+Dropbox, Box, ...) behind one interface. See [PLAN.md](PLAN.md) for architecture and milestones, and [docs/SETUP.md](docs/SETUP.md) to put it on a server.
 
 **Status: M0 scaffold.** Working today: owner setup and sign-in, a "server folder" drive, and the full
 browse/upload/download/new folder/rename/move/delete/search UI in light and dark themes.
