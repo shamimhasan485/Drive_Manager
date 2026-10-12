@@ -48,6 +48,7 @@ sudo usermod -aG docker $USER && newgrp docker
 4. **Credentials → Create credentials → OAuth client ID**:
    - Type **Web application**.
    - Authorized redirect URI: `https://shamim-files.duckdns.org/api/accounts/oauth/gdrive/callback`
+     (also add `http://localhost:8000/api/accounts/oauth/gdrive/callback` to test on your own PC)
    - Copy the **Client ID** and **Client secret**. Keep them private; they go only into the server's `.env`.
 5. While the app is in **Testing**, Google sign-ins expire every 7 days. Once everything works, click
    **Publish app** on the consent screen. Google will show an "unverified app" warning when you connect a

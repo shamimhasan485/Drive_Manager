@@ -7,7 +7,18 @@ Dropbox, Box, ...) behind one interface. See [PLAN.md](PLAN.md) for architecture
 browse/upload/download/new folder/rename/move/delete/search UI in light and dark themes.
 The Google Drive adapter is written but untested until OAuth keys exist (milestone M1).
 
-## Run locally
+## Try it on Windows
+
+1. Install Python and Node.js once (in PowerShell): `winget install Python.Python.3.13 OpenJS.NodeJS.LTS`
+2. Download this repo (green **Code** button → **Download ZIP**, then extract it) or `git clone` it.
+3. Double-click **`start-windows.bat`**. The first run takes a few minutes; then your browser opens
+   http://localhost:8000. Create your account, then **Connect account → Server folder** to play with a
+   test drive stored in `%USERPROFILE%\DriveManagerTest`.
+4. To connect real Google Drives on your PC, follow [docs/SETUP.md §4](docs/SETUP.md#4-create-the-google-oauth-app)
+   with the redirect URI `http://localhost:8000/api/accounts/oauth/gdrive/callback`, put the two keys in the
+   `.env` file the script created, and start it again.
+
+## Run locally (developers)
 
 ```bash
 # backend
