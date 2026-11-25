@@ -11,11 +11,11 @@ class Base(DeclarativeBase):
     pass
 
 
-_settings = get_settings()
-if _settings.database_url.startswith("sqlite"):
-    Path(_settings.database_url.split("///", 1)[1]).parent.mkdir(parents=True, exist_ok=True)
+_url = get_settings().db_url
+if _url.startswith("sqlite") and ":memory:" not in _url:
+    Path(_url.split("///", 1)[1]).parent.mkdir(parents=True, exist_ok=True)
 
-engine = create_async_engine(_settings.database_url)
+engine = create_async_engine(_url)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

@@ -6,6 +6,20 @@ export type Entry = {
   modified_at: string | null; parent_ids: string[]; thumbnail_url: string | null; web_url: string | null
 }
 export type Listing = { entries: Entry[]; next_page_token: string | null }
+export type SettingsValues = {
+  public_url: string; server_folder_enabled: boolean; server_folder_path: string
+  google_client_id: string; dropbox_app_key: string; box_client_id: string
+}
+export type SecretKey = 'google_client_secret' | 'dropbox_app_secret' | 'box_client_secret'
+export type SettingsPage = {
+  values: SettingsValues
+  secrets_set: Record<SecretKey, boolean>
+  defaults: { server_folder_path: string }
+  detected_url: string
+  effective_url: string
+  redirect_uris: Record<'gdrive' | 'dropbox' | 'box', string>
+}
+export type SettingsUpdate = Partial<Record<keyof SettingsValues | SecretKey, string | boolean | null>>
 
 export class ApiError extends Error {
   status: number
@@ -37,6 +51,16 @@ export const api = {
   setup: (b: { name: string; email: string; password: string }) => req<User>('POST', '/api/auth/setup', b),
   login: (b: { email: string; password: string }) => req<User>('POST', '/api/auth/login', b),
   logout: () => req('POST', '/api/auth/logout'),
+  updateMe: (name: string) => req<User>('PATCH', '/api/auth/me', { name }),
+  changePassword: (current_password: string, new_password: string) =>
+    req('POST', '/api/auth/password', { current_password, new_password }),
+
+  settings: () => req<SettingsPage>('GET', '/api/admin/settings'),
+  saveSettings: (b: SettingsUpdate) => req<SettingsPage>('PUT', '/api/admin/settings', b),
+  users: () => req<User[]>('GET', '/api/admin/users'),
+  createUser: (b: { name: string; email: string; password: string; is_admin: boolean }) => req<User>('POST', '/api/admin/users', b),
+  updateUser: (id: string, b: { name?: string; is_admin?: boolean; password?: string }) => req<User>('PATCH', `/api/admin/users/${id}`, b),
+  deleteUser: (id: string) => req('DELETE', `/api/admin/users/${id}`),
 
   providers: () => req<ProviderInfo[]>('GET', '/api/accounts/providers'),
   accounts: () => req<Account[]>('GET', '/api/accounts'),

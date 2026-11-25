@@ -48,8 +48,8 @@ sudo usermod -aG docker $USER && newgrp docker
 4. **Credentials → Create credentials → OAuth client ID**:
    - Type **Web application**.
    - Authorized redirect URI: `https://shamim-files.duckdns.org/api/accounts/oauth/gdrive/callback`
-     (also add `http://localhost:8000/api/accounts/oauth/gdrive/callback` to test on your own PC)
-   - Copy the **Client ID** and **Client secret**. Keep them private; they go only into the server's `.env`.
+     (Drive Manager shows the exact URI to use under **Settings → Cloud providers**.)
+   - Copy the **Client ID** and **Client secret**. Keep them private; you'll paste them into Drive Manager.
 5. While the app is in **Testing**, Google sign-ins expire every 7 days. Once everything works, click
    **Publish app** on the consent screen. Google will show an "unverified app" warning when you connect a
    Drive; click *Advanced → Go to Drive Manager*. That is expected for a private family app.
@@ -59,22 +59,7 @@ sudo usermod -aG docker $USER && newgrp docker
 ```bash
 git clone https://github.com/shamimhasan485/Drive_Manager.git
 cd Drive_Manager
-cp .env.example .env
-docker run --rm python:3.13-slim python -c "import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))"
-nano .env
 ```
-
-In `.env` set:
-
-```
-DM_SECRET_KEY=<the value printed above>
-DM_PUBLIC_URL=https://shamim-files.duckdns.org
-DM_COOKIE_SECURE=true
-DM_GOOGLE_CLIENT_ID=<from step 4>
-DM_GOOGLE_CLIENT_SECRET=<from step 4>
-```
-
-Back up `DM_SECRET_KEY` somewhere safe: without it, connected accounts must be reconnected.
 
 Put your hostname in `deploy/Caddyfile` (replace `files.example.com`), then start everything:
 
@@ -84,8 +69,12 @@ docker compose up -d --build
 docker compose logs -f app     # Ctrl+C to stop watching
 ```
 
-Open `https://shamim-files.duckdns.org`, create your owner account, then **Connect account → Google Drive**.
-Repeat for each Google account you want to add.
+Open `https://shamim-files.duckdns.org` and create your owner account. Then open **Settings** (gear icon) →
+**Cloud providers**, paste the Google Client ID and secret from step 4, and save. Now **Connect account →
+Google Drive** works; repeat it for each Google account you want to add. Add family members under
+**Settings → Family & users**.
+
+Everything Drive Manager stores (database, encryption key) is in the `dm-data` Docker volume: back it up.
 
 ## 6. Updating later
 
@@ -99,5 +88,5 @@ cd ~/Drive_Manager && git pull && cd deploy && docker compose up -d --build
 |---|---|
 | Browser can't reach the site | Check the Oracle security list and the `iptables` step; `curl -I http://<ip>` from your PC should answer |
 | HTTPS certificate error | DuckDNS must point at the server's current IP; see `docker compose logs caddy` |
-| Google says `redirect_uri_mismatch` | The redirect URI in Google Cloud must match `DM_PUBLIC_URL` exactly, including `https` |
-| Google Drive option is greyed out | `DM_GOOGLE_CLIENT_ID` is missing from `.env`; restart with `docker compose up -d` |
+| Google says `redirect_uri_mismatch` | Copy the redirect URI from **Settings → Cloud providers** into Google Cloud exactly, including `https` |
+| Google Drive option is greyed out | An admin hasn't saved the Google keys under **Settings → Cloud providers** yet |

@@ -30,23 +30,7 @@ if (-not (Test-Path "node_modules")) { npm ci --no-audit --no-fund }
 npm run build
 Pop-Location
 
-# 3. Settings (created once; edit .env to add Google keys)
-if (-not (Test-Path ".env")) {
-  $key = & $py -c "import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))"
-  $drive = Join-Path $env:USERPROFILE "DriveManagerTest"
-  $envText = @"
-DM_SECRET_KEY=$key
-DM_PUBLIC_URL=http://localhost:8000
-DM_COOKIE_SECURE=false
-DM_LOCAL_ROOT=$drive
-DM_GOOGLE_CLIENT_ID=
-DM_GOOGLE_CLIENT_SECRET=
-"@
-  [IO.File]::WriteAllText((Join-Path $PSScriptRoot ".env"), $envText, (New-Object Text.UTF8Encoding($false)))
-  Write-Host "Created .env (test drive folder: $drive)" -ForegroundColor Green
-}
-
-# 4. Run
+# 3. Run (settings such as cloud keys are made in the app: Settings, gear icon)
 Write-Host ""
 Write-Host "Drive Manager is starting at http://localhost:8000  (press Ctrl+C to stop)" -ForegroundColor Green
 Start-Process "http://localhost:8000"

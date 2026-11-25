@@ -1,20 +1,12 @@
-import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.config import get_settings
-from app.db import init_db
-from app.main import app
 from app.security import decrypt_json, encrypt_json
+from tests.conftest import H
 
-H = {"x-requested-with": "drive-manager"}
 
-
-@pytest.fixture
-async def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(get_settings(), "local_root", tmp_path)
-    await init_db()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+def test_secret_key_generated_in_data_dir():
+    encrypt_json({})
+    key = get_settings().data_dir / "secret.key"
+    assert key.exists() and len(key.read_text().strip()) == 43
 
 
 def test_token_encryption_roundtrip():

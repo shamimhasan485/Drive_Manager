@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { Cloud, LogOut, Moon, MoreHorizontal, Plus, Sun, Unplug } from 'lucide-react'
+import { Cloud, LogOut, Moon, MoreHorizontal, Plus, Settings, Sun, Unplug } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { api, type Account, type User } from '../api'
@@ -28,9 +28,10 @@ function QuotaBar({ account }: { account: Account }) {
   )
 }
 
-export function Sidebar({ user, accounts, activeId, onSelect, onDropToAccount }: {
+export function Sidebar({ user, accounts, activeId, onSelect, onDropToAccount, onOpenSettings }: {
   user: User; accounts: Account[]; activeId: string | null; onSelect: (a: Account) => void
   onDropToAccount: (a: Account, e: React.DragEvent) => void
+  onOpenSettings: (section?: 'account' | 'providers') => void
 }) {
   const qc = useQueryClient()
   const [connectOpen, setConnectOpen] = useState(false)
@@ -102,11 +103,12 @@ export function Sidebar({ user, accounts, activeId, onSelect, onDropToAccount }:
           <p className="truncate text-sm font-medium">{user.name}</p>
           <p className="truncate text-xs text-zinc-500">{user.email}</p>
         </div>
+        <Button variant="ghost" size="icon" onClick={() => onOpenSettings()} aria-label="Settings" title="Settings"><Settings size={16} /></Button>
         <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">{dark ? <Sun size={16} /> : <Moon size={16} />}</Button>
         <Button variant="ghost" size="icon" onClick={() => logout.mutate()} aria-label="Sign out" title="Sign out"><LogOut size={16} /></Button>
       </div>
 
-      <ConnectDialog open={connectOpen} onClose={() => setConnectOpen(false)} />
+      <ConnectDialog open={connectOpen} onClose={() => setConnectOpen(false)} isAdmin={user.is_admin} onSetup={() => onOpenSettings('providers')} />
     </aside>
   )
 }

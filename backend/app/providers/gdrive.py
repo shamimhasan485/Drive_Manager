@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ..config import get_settings
+from .. import runtime
 from .base import Capabilities, Entry, OAuthProvider, Page, ProviderError, Quota
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -40,9 +40,8 @@ class GoogleDriveProvider(OAuthProvider):
     # ---- OAuth -------------------------------------------------------------
     @classmethod
     def authorize_url(cls, redirect_uri: str, state: str) -> str:
-        s = get_settings()
         return AUTH_URL + "?" + urlencode({
-            "client_id": s.google_client_id,
+            "client_id": runtime.get("google_client_id"),
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": SCOPES,
@@ -54,12 +53,11 @@ class GoogleDriveProvider(OAuthProvider):
 
     @classmethod
     async def exchange_code(cls, code: str, redirect_uri: str) -> tuple[dict, str | None]:
-        s = get_settings()
         async with httpx.AsyncClient(timeout=30) as http:
             r = await http.post(TOKEN_URL, data={
                 "code": code,
-                "client_id": s.google_client_id,
-                "client_secret": s.google_client_secret,
+                "client_id": runtime.get("google_client_id"),
+                "client_secret": runtime.get("google_client_secret"),
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             })
@@ -80,10 +78,9 @@ class GoogleDriveProvider(OAuthProvider):
     async def _token(self) -> str:
         if self.creds.get("expires_at", 0) - 60 > time.time():
             return self.creds["access_token"]
-        s = get_settings()
         r = await self.http.post(TOKEN_URL, data={
-            "client_id": s.google_client_id,
-            "client_secret": s.google_client_secret,
+            "client_id": runtime.get("google_client_id"),
+            "client_secret": runtime.get("google_client_secret"),
             "refresh_token": self.creds["refresh_token"],
             "grant_type": "refresh_token",
         })

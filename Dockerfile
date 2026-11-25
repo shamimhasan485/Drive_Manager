@@ -12,7 +12,7 @@ RUN python -c "import tomllib;print('\\n'.join(tomllib.load(open('pyproject.toml
  && pip install --no-cache-dir -r req.txt
 COPY backend/app ./app
 COPY --from=web /web/dist /app/frontend/dist
-ENV DM_DATABASE_URL=sqlite+aiosqlite:////data/drive_manager.db
+ENV DM_DATA_DIR=/data
 VOLUME /data
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

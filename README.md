@@ -13,10 +13,24 @@ The Google Drive adapter is written but untested until OAuth keys exist (milesto
 2. Download this repo (green **Code** button → **Download ZIP**, then extract it) or `git clone` it.
 3. Double-click **`start-windows.bat`**. The first run takes a few minutes; then your browser opens
    http://localhost:8000. Create your account, then **Connect account → Server folder** to play with a
-   test drive stored in `%USERPROFILE%\DriveManagerTest`.
-4. To connect real Google Drives on your PC, follow [docs/SETUP.md §4](docs/SETUP.md#4-create-the-google-oauth-app)
-   with the redirect URI `http://localhost:8000/api/accounts/oauth/gdrive/callback`, put the two keys in the
-   `.env` file the script created, and start it again.
+   test drive stored in the app's `data\storage` folder.
+4. To connect Google Drive, open **Settings** (gear icon, bottom left) → **Cloud providers**. The page walks
+   you through creating the keys and shows the exact redirect URI to paste into Google.
+
+## Configuration
+
+There are no config files to edit. On first run Drive Manager creates its database and its encryption key
+in `data/` (back this folder up). Everything else lives in the app under **Settings**:
+
+| Section | What you set |
+|---|---|
+| My account | Your name and password |
+| Cloud providers | Google Drive / Dropbox / Box keys (stored encrypted), with step-by-step help |
+| Family & users | Add people, make them admins, reset passwords, remove them |
+| General | The web address people use, and whether a folder on the server can be used as a drive |
+
+`DM_` environment variables (see `.env.example`) still work, but only as defaults for those settings,
+which is handy for Docker deploys.
 
 ## Run locally (developers)
 
@@ -26,7 +40,6 @@ Linux / macOS:
 # backend
 cd backend
 pip install -e ".[dev]"
-export DM_SECRET_KEY=$(python -m app.security genkey) DM_LOCAL_ROOT=/tmp/dm-drive
 uvicorn app.main:app --reload --port 8000
 pytest
 
@@ -36,14 +49,12 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Windows (PowerShell; the `export`/`$(...)` lines above only work in Linux/macOS shells):
+Windows (PowerShell):
 
 ```powershell
 # backend: keep this window open
 cd backend
 pip install -e ".[dev]"
-$env:DM_SECRET_KEY = python -m app.security genkey
-$env:DM_LOCAL_ROOT = "$env:USERPROFILE\DriveManagerTest"
 python -m uvicorn app.main:app --reload --port 8000
 
 # frontend, in a second PowerShell window
@@ -58,7 +69,7 @@ If sign-in shows "Not Found", the backend isn't running on port 8000.
 ## Deploy on a Linux VM
 
 1. Point a domain at the VM, install Docker.
-2. `cp .env.example .env` and fill it in; set the domain in `deploy/Caddyfile`.
+2. Set your domain in `deploy/Caddyfile`.
 3. `cd deploy && docker compose up -d --build`
 4. Open `https://your-domain`, create the owner account, connect your drives.
 
