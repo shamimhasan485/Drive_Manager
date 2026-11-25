@@ -14,6 +14,13 @@ export default function App() {
 
   if (status.isLoading || me.isLoading)
     return <div className="flex h-full items-center justify-center text-zinc-400"><Spinner /></div>
+  if (status.error)
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="font-medium">Can't reach the Drive Manager server</p>
+        <p className="max-w-md text-sm text-zinc-500">Make sure the backend is running on port 8000, then reload this page. ({status.error.message})</p>
+      </div>
+    )
   if (!me.data) return <AuthScreen needsSetup={!!status.data?.needs_setup} />
   return <Shell />
 }
