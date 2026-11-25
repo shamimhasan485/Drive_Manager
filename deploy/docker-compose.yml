@@ -1,7 +1,9 @@
 services:
   app:
     build: ..
-    env_file: ../.env
+    env_file:
+      - path: ../.env
+        required: false
     volumes:
       - dm-data:/data
     restart: unless-stopped

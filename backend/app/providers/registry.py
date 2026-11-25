@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ..config import get_settings
+from .. import runtime
 from ..models import Account
 from ..security import decrypt_json, encrypt_json
 from .base import OAuthProvider, ProviderError, StorageProvider
@@ -14,22 +14,22 @@ OAUTH_PROVIDERS: dict[str, type[OAuthProvider]] = {
 
 
 def available_providers() -> list[dict]:
-    s = get_settings()
     items = [
-        {"kind": "gdrive", "name": "Google Drive", "configured": bool(s.google_client_id)},
+        {"kind": "gdrive", "name": "Google Drive",
+         "configured": bool(runtime.get("google_client_id") and runtime.get("google_client_secret"))},
         {"kind": "dropbox", "name": "Dropbox", "configured": False, "coming_soon": True},
         {"kind": "box", "name": "Box", "configured": False, "coming_soon": True},
     ]
-    if s.local_root:
+    if runtime.server_folder_root():
         items.append({"kind": "local", "name": "Server folder", "configured": True})
     return items
 
 
 def open_provider(account: Account, db_session=None) -> StorageProvider:
     if account.provider == "local":
-        root = get_settings().local_root
+        root = runtime.server_folder_root()
         if not root:
-            raise ProviderError("Server folders are disabled (DM_LOCAL_ROOT unset)", 400)
+            raise ProviderError("Server folders are turned off in Settings", 400)
         return LocalProvider(Path(root) / account.settings.get("subdir", ""))
 
     cls = OAUTH_PROVIDERS.get(account.provider)

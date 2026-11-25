@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 import sys
+from functools import lru_cache
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -35,13 +36,25 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def new_key() -> str:
+    return base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
+
+
+@lru_cache
 def _key() -> bytes:
-    raw = get_settings().secret_key
+    """The encryption key: DM_SECRET_KEY if set, else data_dir/secret.key (created on first use)."""
+    s = get_settings()
+    raw = s.secret_key
     if not raw:
-        raise RuntimeError("DM_SECRET_KEY is not set. Generate one with: python -m app.security genkey")
+        path = s.data_dir / "secret.key"
+        if not path.exists():
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(new_key())
+        raw = path.read_text().strip()
     key = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
     if len(key) != 32:
-        raise RuntimeError("DM_SECRET_KEY must decode to 32 bytes")
+        raise RuntimeError("The secret key must decode to 32 bytes")
     return key
 
 
@@ -59,4 +72,4 @@ def decrypt_json(blob: str) -> dict:
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["genkey"]:
-    print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))
+    print(new_key())

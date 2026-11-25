@@ -76,10 +76,23 @@ class StorageProvider(ABC):
     async def delete(self, item_id: str) -> None: ...
 
     @abstractmethod
-    def download(self, item_id: str) -> AsyncIterator[bytes]: ...
+    def download(self, item_id: str, start: int = 0, end: int | None = None,
+                 export_mime: str | None = None) -> AsyncIterator[bytes]:
+        """Stream bytes [start, end] (end inclusive, None = to the end).
+
+        export_mime asks for a converted copy (e.g. a Google Doc as PDF); ranges don't apply to it.
+        """
 
     @abstractmethod
     async def upload(self, parent_id: str, name: str, stream: AsyncIterator[bytes]) -> Entry: ...
+
+    def export_formats(self, entry: Entry) -> tuple[str, str] | None:
+        """For files with no bytes of their own (Google Docs...), the (mime, extension) a download produces."""
+        return None
+
+    def preview_format(self, entry: Entry) -> str | None:
+        """For such files, a mime type the browser can preview (usually PDF)."""
+        return None
 
     async def search(self, query: str) -> Page:
         raise ProviderError(f"Search is not supported by {self.display_name} yet", 501)

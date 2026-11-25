@@ -4,6 +4,8 @@ from fastapi import Cookie, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .. import runtime
+from ..config import get_settings
 from ..db import get_db
 from ..models import Account, Session, User
 from ..security import hash_token
@@ -35,3 +37,19 @@ async def owned_account(account_id: str, user: User = Depends(current_user), db:
     if not acc:
         raise HTTPException(404, "Account not found")
     return acc
+
+
+def public_base_url(request: Request) -> str:
+    """The address people reach the app at: the Settings value, else this request's own address."""
+    configured = (runtime.get("public_url") or "").strip()
+    return (configured or str(request.base_url)).rstrip("/")
+
+
+def cookie_secure(request: Request) -> bool:
+    return get_settings().cookie_secure or public_base_url(request).startswith("https://")
+
+
+async def admin_user(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(403, "Admins only")
+    return user

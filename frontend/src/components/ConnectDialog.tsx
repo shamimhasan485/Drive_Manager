@@ -5,7 +5,8 @@ import { api } from '../api'
 import { ProviderLogo } from './ProviderLogo'
 import { Modal } from './ui'
 
-export function ConnectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ConnectDialog({ open, onClose, isAdmin, onSetup }:
+  { open: boolean; onClose: () => void; isAdmin: boolean; onSetup: () => void }) {
   const qc = useQueryClient()
   const providers = useQuery({ queryKey: ['providers'], queryFn: api.providers, enabled: open })
   const local = useMutation({
@@ -24,18 +25,22 @@ export function ConnectDialog({ open, onClose }: { open: boolean; onClose: () =>
       <p className="mb-3 text-sm text-zinc-500">You can connect as many accounts as you like, including several of the same kind.</p>
       <div className="space-y-1.5 pb-2">
         {providers.data?.map(p => {
-          const disabled = !p.configured
+          const canSetUp = !p.configured && !p.coming_soon && isAdmin
+          const disabled = !p.configured && !canSetUp
           return (
-            <button key={p.kind} disabled={disabled} onClick={() => choose(p.kind)}
+            <button key={p.kind} disabled={disabled} onClick={() => (canSetUp ? (onClose(), onSetup()) : choose(p.kind))}
               className="group flex w-full items-center gap-3 rounded-xl border border-zinc-200 px-3.5 py-3 text-left transition hover:border-accent-500/50 hover:bg-accent-50/60 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-zinc-200 disabled:hover:bg-transparent dark:border-zinc-800 dark:hover:bg-accent-500/10">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800"><ProviderLogo kind={p.kind} size={20} /></span>
               <span className="flex-1">
                 <span className="block text-sm font-medium">{p.name}</span>
                 <span className="block text-xs text-zinc-500">
-                  {p.coming_soon ? 'Coming soon' : !p.configured ? 'Add OAuth keys on the server to enable' : p.kind === 'local' ? 'Use storage on this server' : 'Sign in to connect'}
+                  {p.coming_soon ? 'Coming soon'
+                    : !p.configured ? (isAdmin ? 'Set up in Settings (takes about 5 minutes)' : 'Ask an admin to set this up')
+                      : p.kind === 'local' ? 'Use storage on this server' : 'Sign in to connect'}
                 </span>
               </span>
-              {!disabled && <ChevronRight size={16} className="text-zinc-400 transition group-hover:translate-x-0.5" />}
+              {canSetUp && <span className="rounded-md bg-accent-50 px-2 py-1 text-xs font-medium text-accent-700 dark:bg-accent-500/15 dark:text-accent-100">Set up</span>}
+              {p.configured && <ChevronRight size={16} className="text-zinc-400 transition group-hover:translate-x-0.5" />}
             </button>
           )
         })}

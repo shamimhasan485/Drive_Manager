@@ -1,19 +1,19 @@
 import hmac
 import secrets
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..config import get_settings
+from .. import runtime
 from ..db import get_db
 from ..models import Account, User
 from ..providers.base import ProviderError
 from ..providers.registry import OAUTH_PROVIDERS, available_providers, open_provider
 from ..security import encrypt_json
-from .deps import current_user, owned_account
+from .deps import cookie_secure, current_user, owned_account, public_base_url
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -88,8 +88,8 @@ async def quota(acc: Account = Depends(owned_account), db: AsyncSession = Depend
 
 @router.post("/local", response_model=AccountOut)
 async def connect_local(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    if not get_settings().local_root:
-        raise HTTPException(400, "Server folders are disabled")
+    if not runtime.server_folder_root():
+        raise HTTPException(400, "Server folders are turned off in Settings")
     acc = Account(owner_id=user.id, provider="local", label="Server folder", color=await _next_color(db, user),
                   settings={"subdir": user.id})
     db.add(acc)
@@ -97,24 +97,24 @@ async def connect_local(user: User = Depends(current_user), db: AsyncSession = D
     return _out(acc)
 
 
-def _redirect_uri(provider: str) -> str:
-    return f"{get_settings().public_url.rstrip('/')}/api/accounts/oauth/{provider}/callback"
+def redirect_uri(request: Request, provider: str) -> str:
+    return f"{public_base_url(request)}/api/accounts/oauth/{provider}/callback"
 
 
 @router.get("/oauth/{provider}/start")
-async def oauth_start(provider: str, user: User = Depends(current_user)):
+async def oauth_start(provider: str, request: Request, user: User = Depends(current_user)):
     cls = OAUTH_PROVIDERS.get(provider)
     if not cls:
         raise HTTPException(404, "Unknown provider")
     state = secrets.token_urlsafe(24)
-    resp = RedirectResponse(cls.authorize_url(_redirect_uri(provider), state))
-    resp.set_cookie(STATE_COOKIE, state, httponly=True, secure=get_settings().cookie_secure,
+    resp = RedirectResponse(cls.authorize_url(redirect_uri(request, provider), state))
+    resp.set_cookie(STATE_COOKIE, state, httponly=True, secure=cookie_secure(request),
                     samesite="lax", max_age=600, path="/api/accounts/oauth")
     return resp
 
 
 @router.get("/oauth/{provider}/callback")
-async def oauth_callback(provider: str, code: str | None = None, state: str | None = None, error: str | None = None,
+async def oauth_callback(provider: str, request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
                          user: User = Depends(current_user), db: AsyncSession = Depends(get_db),
                          dm_oauth_state: str | None = Cookie(default=None)):
     if error:
@@ -123,7 +123,7 @@ async def oauth_callback(provider: str, code: str | None = None, state: str | No
     if not cls or not code or not state or not dm_oauth_state or not hmac.compare_digest(state, dm_oauth_state):
         raise HTTPException(400, "Invalid OAuth callback")
     try:
-        creds, email = await cls.exchange_code(code, _redirect_uri(provider))
+        creds, email = await cls.exchange_code(code, redirect_uri(request, provider))
     except ProviderError as e:
         raise HTTPException(e.status, str(e))
 
