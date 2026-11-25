@@ -20,6 +20,8 @@ The Google Drive adapter is written but untested until OAuth keys exist (milesto
 
 ## Run locally (developers)
 
+Linux / macOS:
+
 ```bash
 # backend
 cd backend
@@ -33,6 +35,25 @@ cd frontend
 npm install
 npm run dev          # http://localhost:5173
 ```
+
+Windows (PowerShell; the `export`/`$(...)` lines above only work in Linux/macOS shells):
+
+```powershell
+# backend: keep this window open
+cd backend
+pip install -e ".[dev]"
+$env:DM_SECRET_KEY = python -m app.security genkey
+$env:DM_LOCAL_ROOT = "$env:USERPROFILE\DriveManagerTest"
+python -m uvicorn app.main:app --reload --port 8000
+
+# frontend, in a second PowerShell window
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+
+The first time you open the app it asks you to create the owner account; there is no default login.
+If sign-in shows "Not Found", the backend isn't running on port 8000.
 
 ## Deploy on a Linux VM
 
