@@ -17,12 +17,12 @@ SCOPES = "https://www.googleapis.com/auth/drive openid email"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 FIELDS = "id,name,mimeType,size,modifiedTime,parents,thumbnailLink,webViewLink"
 
-# Native Google files have no bytes; download exports them instead.
+# Native Google files have no bytes; download exports them instead (mime, file extension).
 EXPORTS = {
-    "application/vnd.google-apps.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.google-apps.spreadsheet": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.google-apps.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.google-apps.drawing": "application/pdf",
+    "application/vnd.google-apps.document": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "application/vnd.google-apps.spreadsheet": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+    "application/vnd.google-apps.presentation": ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"),
+    "application/vnd.google-apps.drawing": ("application/pdf", "pdf"),
 }
 
 
@@ -157,13 +157,21 @@ class GoogleDriveProvider(OAuthProvider):
         # Move to trash rather than permanently deleting.
         await self._req("PATCH", f"{API}/files/{item_id}", json={"trashed": True})
 
-    async def download(self, item_id: str) -> AsyncIterator[bytes]:
-        meta = await self.stat(item_id)
-        if meta.mime_type in EXPORTS:
-            url, params = f"{API}/files/{item_id}/export", {"mimeType": EXPORTS[meta.mime_type]}
-        else:
-            url, params = f"{API}/files/{item_id}", {"alt": "media"}
+    def export_formats(self, entry: Entry) -> tuple[str, str] | None:
+        return EXPORTS.get(entry.mime_type or "")
+
+    def preview_format(self, entry: Entry) -> str | None:
+        return "application/pdf" if entry.mime_type in EXPORTS else None
+
+    async def download(self, item_id: str, start: int = 0, end: int | None = None,
+                       export_mime: str | None = None) -> AsyncIterator[bytes]:
         headers = {"Authorization": f"Bearer {await self._token()}"}
+        if export_mime:
+            url, params = f"{API}/files/{item_id}/export", {"mimeType": export_mime}
+        else:
+            url, params = f"{API}/files/{item_id}", {"alt": "media", "supportsAllDrives": "true"}
+            if start or end is not None:
+                headers["Range"] = f"bytes={start}-{'' if end is None else end}"
         async with self.http.stream("GET", url, params=params, headers=headers) as r:
             if r.is_error:
                 raise ProviderError(f"Google Drive download failed: {r.status_code}")

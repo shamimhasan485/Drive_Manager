@@ -1,3 +1,5 @@
+import mimetypes
+import re
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from urllib.parse import quote
@@ -90,26 +92,99 @@ async def delete(id: str, acc: Account = Depends(owned_account), db: AsyncSessio
     return {"ok": True}
 
 
+# Types the browser may render inline. Everything else is sent as a download, and anything
+# inline except PDF is sandboxed, so a file someone uploads can never run script on this site.
+INLINE_SAFE = ("image/", "video/", "audio/", "application/pdf", "text/plain")
+TEXTLIKE = ("text/", "application/json", "application/xml", "application/javascript", "application/x-sh",
+            "application/x-yaml", "application/toml")
+RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def _media_type(name: str, mime: str | None) -> str:
+    if not mime or mime == "application/octet-stream":
+        mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    return mime
+
+
+def _parse_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """Single byte range -> (start, end inclusive). None = whole file. Raises 416 if unsatisfiable."""
+    m = RANGE_RE.match((header or "").strip())
+    if not m or not (m.group(1) or m.group(2)):
+        return None
+    if m.group(1):
+        start, end = int(m.group(1)), int(m.group(2)) if m.group(2) else size - 1
+    else:  # suffix range: last N bytes
+        start, end = max(0, size - int(m.group(2))), size - 1
+    end = min(end, size - 1)
+    if start > end or start >= size:
+        raise HTTPException(416, "Range not satisfiable", headers={"Content-Range": f"bytes */{size}"})
+    return start, end
+
+
 @router.get("/download")
-async def download(id: str, acc: Account = Depends(owned_account), db: AsyncSession = Depends(get_db)):
+async def download(request: Request, id: str, inline: bool = False, preview: bool = False,
+                   acc: Account = Depends(owned_account), db: AsyncSession = Depends(get_db)):
+    """Stream a file. inline=1 shows it in the browser (with byte ranges for seeking in video/audio);
+    preview=1 converts files that need it (e.g. Google Docs to PDF)."""
     p: StorageProvider = open_provider(acc, db)
     try:
         meta = await p.stat(id)
     except ProviderError as e:
         await p.close()
         raise HTTPException(e.status, str(e))
+    if meta.is_folder:
+        await p.close()
+        raise HTTPException(400, "Folders can't be downloaded")
+
+    name, export_mime = meta.name, None
+    if preview and (pm := p.preview_format(meta)):
+        export_mime = media = pm
+    elif fmt := p.export_formats(meta):
+        export_mime, ext = fmt
+        media = export_mime
+        if not name.lower().endswith("." + ext):
+            name = f"{name}.{ext}"
+    else:
+        media = _media_type(meta.name, meta.mime_type)
+
+    headers: dict[str, str] = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"}
+    if inline:
+        if media.startswith(TEXTLIKE):
+            media = "text/plain; charset=utf-8"
+        if media.startswith(INLINE_SAFE):
+            if not media.startswith("application/pdf"):
+                headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'"
+            disposition = "inline"
+        else:
+            disposition = "attachment"
+    else:
+        disposition = "attachment"
+    headers["Content-Disposition"] = f"{disposition}; filename*=UTF-8''{quote(name)}"
+
+    start, end, status = 0, None, 200
+    if export_mime is None and meta.size is not None:
+        headers["Accept-Ranges"] = "bytes"
+        try:
+            rng = _parse_range(request.headers.get("range"), meta.size)
+        except HTTPException:
+            await p.close()
+            raise
+        if rng:
+            start, end = rng
+            status = 206
+            headers["Content-Range"] = f"bytes {start}-{end}/{meta.size}"
+            headers["Content-Length"] = str(end - start + 1)
+        else:
+            headers["Content-Length"] = str(meta.size)
 
     async def body():
         try:
-            async for chunk in p.download(id):
+            async for chunk in p.download(id, start, end, export_mime):
                 yield chunk
         finally:
             await p.close()
 
-    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(meta.name)}"}
-    if meta.size is not None:
-        headers["Content-Length"] = str(meta.size)
-    return StreamingResponse(body(), media_type=meta.mime_type or "application/octet-stream", headers=headers)
+    return StreamingResponse(body(), status_code=status, media_type=media, headers=headers)
 
 
 @router.post("/upload")

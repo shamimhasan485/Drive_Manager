@@ -83,9 +83,17 @@ class LocalProvider(StorageProvider):
             raise ProviderError("Cannot delete the root", 400)
         shutil.rmtree(p) if p.is_dir() else p.unlink()
 
-    async def download(self, item_id: str) -> AsyncIterator[bytes]:
+    async def download(self, item_id: str, start: int = 0, end: int | None = None,
+                       export_mime: str | None = None) -> AsyncIterator[bytes]:
         async with await anyio.open_file(self._path(item_id), "rb") as f:
-            while chunk := await f.read(CHUNK):
+            await f.seek(start)
+            remaining = None if end is None else end - start + 1
+            while remaining is None or remaining > 0:
+                chunk = await f.read(CHUNK if remaining is None else min(CHUNK, remaining))
+                if not chunk:
+                    break
+                if remaining is not None:
+                    remaining -= len(chunk)
                 yield chunk
 
     async def upload(self, parent_id: str, name: str, stream: AsyncIterator[bytes]) -> Entry:

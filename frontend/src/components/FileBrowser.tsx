@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
-  ArrowDownToLine, ChevronRight, ExternalLink, FolderPlus, LayoutGrid, List, Pencil, RefreshCw, Search, Trash2, Upload, UploadCloud, X,
+  ArrowDownToLine, Eye, Play, ChevronRight, ExternalLink, FolderPlus, LayoutGrid, List, Pencil, RefreshCw, Search, Trash2, Upload, UploadCloud, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { api, type Account, type Entry } from '../api'
 import { formatBytes, formatDate } from '../lib/format'
 import { FileIcon } from './FileIcon'
+import { previewKind } from '../lib/preview'
+import { Preview } from './Preview'
 import { ProviderLogo } from './ProviderLogo'
 import { Button, PromptDialog, Spinner } from './ui'
 
@@ -32,6 +34,7 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
   const anchor = useRef<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'name', asc: true })
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<null | { kind: 'mkdir' } | { kind: 'rename'; entry: Entry }>(null)
   const [dragOver, setDragOver] = useState(false)
   const [dropFolder, setDropFolder] = useState<string | null>(null)
@@ -93,8 +96,14 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
 
   const open = (e: Entry) => {
     if (e.is_folder) onNavigate(debounced ? [...path.slice(0, 1), { id: e.id, name: e.name }] : [...path, { id: e.id, name: e.name }])
-    else window.location.href = api.downloadUrl(account.id, e.id)
+    else setPreviewId(e.id)
   }
+  // Provider thumbnails when there are any; small images on providers without them load directly.
+  const thumb = (e: Entry) => e.thumbnail_url
+    ?? (previewKind(e) === 'image' && (e.size ?? Infinity) < 8 * 1024 * 1024 ? api.viewUrl(account.id, e.id) : null)
+  const download = (e: Entry) => { window.location.href = api.downloadUrl(account.id, e.id) }
+  const previewable = entries.filter(x => !x.is_folder)
+  const previewIndex = previewId ? previewable.findIndex(x => x.id === previewId) : -1
 
   const click = (ev: React.MouseEvent, e: Entry) => {
     const next = new Set(ev.metaKey || ev.ctrlKey ? selected : [])
@@ -115,6 +124,7 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (previewId) return  // the viewer has its own keys
       const typing = (e.target as HTMLElement).closest('input, textarea, [role=dialog]')
       if (e.key === '/' && !typing) { e.preventDefault(); searchInput.current?.focus(); return }
       if (typing) return
@@ -122,7 +132,7 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
       else if (e.key === 'Escape') { setSelected(new Set()); setMenu(null) }
       else if (e.key === 'Delete' || (e.key === 'Backspace' && e.metaKey)) confirmDelete(selectedEntries)
       else if (e.key === 'F2' && selectedEntries.length === 1) setDialog({ kind: 'rename', entry: selectedEntries[0] })
-      else if (e.key === 'Enter' && selectedEntries.length === 1) open(selectedEntries[0])
+      else if ((e.key === 'Enter' || e.key === ' ') && selectedEntries.length === 1) { e.preventDefault(); open(selectedEntries[0]) }
       else if (e.key === 'Backspace' && path.length > 1) onNavigate(path.slice(0, -1))
     }
     window.addEventListener('keydown', onKey)
@@ -205,9 +215,10 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
         {selected.size > 0 ? (
           <div className="animate-pop flex items-center gap-1.5">
             <span className="mr-1 text-sm font-medium">{selected.size} selected</span>
-            {selectedEntries.length === 1 && !selectedEntries[0].is_folder && (
-              <Button size="sm" onClick={() => open(selectedEntries[0])}><ArrowDownToLine size={14} /> Download</Button>
-            )}
+            {selectedEntries.length === 1 && !selectedEntries[0].is_folder && (<>
+              <Button size="sm" onClick={() => open(selectedEntries[0])}><Eye size={14} /> Open</Button>
+              <Button size="sm" onClick={() => download(selectedEntries[0])}><ArrowDownToLine size={14} /> Download</Button>
+            </>)}
             {selectedEntries.length === 1 && <Button size="sm" onClick={() => setDialog({ kind: 'rename', entry: selectedEntries[0] })}><Pencil size={14} /> Rename</Button>}
             <Button size="sm" onClick={() => confirmDelete(selectedEntries)} className="!text-red-600"><Trash2 size={14} /> Delete</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X size={14} /></Button>
@@ -278,8 +289,13 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
                 className={clsx('group flex cursor-default select-none flex-col overflow-hidden rounded-xl border transition',
                   selected.has(e.id) ? 'border-accent-500 bg-accent-50 ring-2 ring-accent-500/30 dark:bg-accent-500/15' : 'border-zinc-200 bg-white hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900',
                   dropFolder === e.id && 'ring-2 ring-accent-500')}>
-                <div className="flex aspect-[4/3] items-center justify-center bg-zinc-50 dark:bg-zinc-800/40">
-                  {e.thumbnail_url ? <img src={e.thumbnail_url} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /> : <FileIcon entry={e} size={40} />}
+                <div className="relative flex aspect-[4/3] items-center justify-center bg-zinc-50 dark:bg-zinc-800/40">
+                  {thumb(e) ? <img src={thumb(e)!} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /> : <FileIcon entry={e} size={40} />}
+                  {previewKind(e) === 'video' && (
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"><Play size={18} className="ml-0.5" fill="currentColor" /></span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 px-2.5 py-2">
                   <FileIcon entry={e} size={14} /><span className="truncate text-[13px] font-medium">{e.name}</span>
@@ -303,7 +319,8 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
         <div className="animate-pop fixed z-40 w-52 rounded-xl border border-zinc-200 bg-white p-1 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
           style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
           {[
-            { icon: menu.entry.is_folder ? ChevronRight : ArrowDownToLine, label: menu.entry.is_folder ? 'Open' : 'Download', run: () => open(menu.entry) },
+            { icon: menu.entry.is_folder ? ChevronRight : Eye, label: 'Open', hint: menu.entry.is_folder ? undefined : 'Space', run: () => open(menu.entry) },
+            ...(menu.entry.is_folder ? [] : [{ icon: ArrowDownToLine, label: 'Download', run: () => download(menu.entry) }]),
             ...(menu.entry.web_url ? [{ icon: ExternalLink, label: `Open in ${account.provider === 'gdrive' ? 'Google Drive' : 'provider'}`, run: () => window.open(menu.entry.web_url!, '_blank', 'noopener') }] : []),
             { icon: Pencil, label: 'Rename', hint: 'F2', run: () => setDialog({ kind: 'rename', entry: menu.entry }) },
             { icon: Trash2, label: 'Delete', hint: 'Del', danger: true, run: () => confirmDelete(selectedEntries.length > 1 ? selectedEntries : [menu.entry]) },
@@ -312,7 +329,7 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
               className={clsx('flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left',
                 'danger' in item && item.danger ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800')}>
               <item.icon size={15} /><span className="flex-1">{item.label}</span>
-              {'hint' in item && <kbd className="text-[11px] text-zinc-400">{item.hint}</kbd>}
+              {'hint' in item && item.hint && <kbd className="text-[11px] text-zinc-400">{item.hint}</kbd>}
             </button>
           ))}
         </div>
@@ -329,6 +346,12 @@ export function FileBrowser({ account, path, onNavigate }: { account: Account; p
             {uploads.some(u => !u.done) && <Spinner className="!h-3 !w-3" />}{uploads.find(u => !u.done)?.name ?? 'Done'}
           </p>
         </div>
+      )}
+
+      {previewIndex >= 0 && (
+        <Preview account={account} entries={previewable} index={previewIndex}
+          onIndex={i => { setPreviewId(previewable[i].id); setSelected(new Set([previewable[i].id])) }}
+          onClose={() => setPreviewId(null)} />
       )}
 
       <PromptDialog open={dialog?.kind === 'mkdir'} title="New folder" label="Folder name" initial="Untitled folder" confirm="Create"

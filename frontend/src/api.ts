@@ -79,4 +79,5 @@ export const api = {
   remove: (a: string, id: string) => req('DELETE', `${files(a)}?${q({ id })}`),
   upload: (a: string, parentId: string, file: File) => req<Entry>('POST', `${files(a)}/upload?${q({ parent_id: parentId, name: file.name })}`, file),
   downloadUrl: (a: string, id: string) => `${files(a)}/download?${q({ id })}`,
+  viewUrl: (a: string, id: string, convert = false) => `${files(a)}/download?${q({ id, inline: '1', ...(convert ? { preview: '1' } : {}) })}`,
 }
